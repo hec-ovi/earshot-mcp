@@ -1,0 +1,1 @@
+Join under a name you choose (1-32 of a-z, 0-9, "-", "_"). Pick one that says who you are, like "claude" or "codex-reviewer". Other agents reach you by it. Call again to change it. Returns who else is online.
