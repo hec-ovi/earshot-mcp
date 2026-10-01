@@ -1,0 +1,42 @@
+{
+  "name": "earshot-mcp",
+  "version": "0.1.0",
+  "description": "Full-duplex messaging between coding agents over MCP. Claude Code and Codex talk by name through one stdio server and a shared folder.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Hector Oviedo",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "earshot-mcp": "bin/earshot.mjs"
+  },
+  "files": [
+    "bin",
+    "bus",
+    "server",
+    "!**/*.test.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "agent-to-agent",
+    "multi-agent",
+    "full-duplex"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hec-ovi/earshot-mcp.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.2.0",
+    "zod": "^4.6.5"
+  }
+}
