@@ -1,6 +1,6 @@
 {
-  "name": "earshot-mcp",
-  "version": "0.2.0",
+  "name": "@hec-ovi/earshot-mcp",
+  "version": "0.3.0",
   "description": "Full-duplex messaging between coding agents over MCP. Claude Code and Codex talk by name through one stdio server and a shared folder.",
   "type": "module",
   "license": "MIT",
@@ -33,7 +33,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/hec-ovi/earshot-mcp.git"
+    "url": "git+https://github.com/hec-ovi/earshot-mcp.git"
+  },
+  "homepage": "https://github.com/hec-ovi/earshot-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/hec-ovi/earshot-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.2.0",

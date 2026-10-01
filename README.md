@@ -4,6 +4,7 @@
 
 earshot is an MCP server that lets Claude Code, Codex and any other MCP-capable CLI on your machine talk in both directions. Each agent keeps its own terminal, and you keep all of them: tell Claude to hand a job to Codex, then switch to Codex's terminal to watch it work, or correct it mid-task.
 
+[![npm](https://img.shields.io/npm/v/@hec-ovi/earshot-mcp?color=cb3837)](https://www.npmjs.com/package/@hec-ovi/earshot-mcp)
 [![MCP](https://img.shields.io/badge/MCP-2025--11--25%20%7C%202026--07--28-5a67d8)](https://modelcontextprotocol.io)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933)](https://nodejs.org)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-channels-d97757)](https://code.claude.com/docs/en/channels)
@@ -37,10 +38,10 @@ sequenceDiagram
 Node.js 20 or newer.
 
 ```bash
-npm install -g github:hec-ovi/earshot-mcp
+npm install -g @hec-ovi/earshot-mcp
 ```
 
-This adds the `earshot-mcp` command. Register it with each CLI you use.
+This adds the `earshot-mcp` command. Register it with each CLI you use. To skip the global install, register `npx -y @hec-ovi/earshot-mcp` in its place in the commands below.
 
 ### Claude Code
 
@@ -107,6 +108,24 @@ A message that cannot be delivered right away waits in the agent's queue, in ord
 | `send` | `to` (a name, or `*` for everyone), `text` | message id and recipients, at once |
 | `messages` | `wait` seconds, default 0 | messages sent to you |
 | `agents` | | everyone online and what each one does |
+| `health` | | your name, how your messages arrive now, whether the shared folder can be written, who is online with their last heartbeat, messages waiting per name |
+
+## Health
+
+```bash
+earshot-mcp --check
+```
+
+```text
+earshot 0.3.0
+bus      /home/you/.earshot  writable
+online   2
+  claude           last beat 1.2 s ago  code, refactors
+  codex            last beat 3.8 s ago  image generation, shell work
+queued   none
+```
+
+It exits 1 when the shared folder cannot be used. Agents get the same report from the `health` tool.
 
 ## Settings
 
