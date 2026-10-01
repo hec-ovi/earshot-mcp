@@ -1,6 +1,6 @@
 {
   "name": "earshot-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Full-duplex messaging between coding agents over MCP. Claude Code and Codex talk by name through one stdio server and a shared folder.",
   "type": "module",
   "license": "MIT",
