@@ -4,7 +4,7 @@ import { join } from 'node:path';
 const POLL_MS = 1000;
 
 /** One agent's queue of message files, oldest first. Only its owner takes from it. */
-export class Inbox {
+export class Queue {
   constructor(dir) {
     this.dir = dir;
     mkdirSync(dir, { recursive: true });
@@ -30,10 +30,10 @@ export class Inbox {
       });
   }
 
-  /** Calls `onMail` when the inbox may have changed. A slow poll backs up file events (bind mounts can miss them). Returns a stop function. */
-  watch(onMail) {
-    const watcher = watch(this.dir, onMail);
-    const timer = setInterval(onMail, POLL_MS);
+  /** Calls `onChange` when the queue may have changed. A slow poll backs up file events (bind mounts can miss them). Returns a stop function. */
+  watch(onChange) {
+    const watcher = watch(this.dir, onChange);
+    const timer = setInterval(onChange, POLL_MS);
     watcher.unref();
     timer.unref();
     return () => {

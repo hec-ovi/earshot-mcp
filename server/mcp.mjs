@@ -12,8 +12,8 @@ const LOCAL = { openWorldHint: false, destructiveHint: false };
 const prompt = (name) => readFileSync(new URL(`./prompts/${name}.md`, import.meta.url), 'utf8').trim();
 
 /**
- * The MCP server for one session: tools join, send, inbox, agents.
- * Every result carries queued mail under `mail`. Tool calls from an interactive Codex session arm its doorbell.
+ * The MCP server for one session: tools join, send, messages, agents.
+ * Every result carries queued messages under `messages`. Tool calls from an interactive Codex session arm its doorbell.
  * `channel` declares Claude Code push and leaves the doorbell to it.
  */
 export function createServer(session, { channel = false } = {}) {
@@ -28,9 +28,9 @@ export function createServer(session, { channel = false } = {}) {
     mcp.registerTool(name, { description: prompt(name), inputSchema: z.object(shape), annotations: { ...LOCAL, ...annotations } }, async (args, ctx) => {
       try {
         const result = await run(args, ctx);
-        const mail = session.take();
+        const queued = session.take();
         if (!channel) session.doorbell = doorbellFor(ctx.mcpReq._meta) ?? null;
-        return text(mail.length ? { ...result, mail: [...(result.mail ?? []), ...mail] } : result);
+        return text(queued.length ? { ...result, messages: [...(result.messages ?? []), ...queued] } : result);
       } catch (err) {
         return { ...text(err.message), isError: true };
       }
@@ -45,8 +45,8 @@ export function createServer(session, { channel = false } = {}) {
   tool('send', {}, { to: z.string().describe('agent name, or "*" for everyone'), text: z.string().describe('the message') }, ({ to, text }) =>
     session.send(to, text),
   );
-  tool('inbox', {}, { wait: z.number().nonnegative().optional().describe('seconds to wait for mail, default 0') }, async ({ wait }, ctx) => ({
-    mail: await session.inbox(wait ?? 0, ctx.mcpReq.signal),
+  tool('messages', {}, { wait: z.number().nonnegative().optional().describe('seconds to wait for a message, default 0') }, async ({ wait }, ctx) => ({
+    messages: await session.messages(wait ?? 0, ctx.mcpReq.signal),
   }));
   tool('agents', { readOnlyHint: true }, {}, () => session.agents());
   return mcp;
@@ -56,7 +56,7 @@ const text = (value) => ({ content: [{ type: 'text', text: typeof value === 'str
 
 /**
  * Serves one agent over stdio on the bus in `dir`.
- * With `channel`, mail is pushed to Claude Code; channels need the 2025 `initialize` handshake, so only that era is served.
+ * With `channel`, messages are pushed to Claude Code; channels need the 2025 `initialize` handshake, so only that era is served.
  */
 export function serve({ dir, channel = false }) {
   const session = new Session(new Bus(dir));

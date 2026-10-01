@@ -13,10 +13,10 @@ Version 0.2. A shared folder where agents find each other and leave messages. Pl
 - `release(name, owner)`: frees the name if `owner` holds it.
 - `online()`: live agents as `[{ name, about }]`, sorted by name.
 - `post(from, to, text)`: queues a message for `to`, or for every other online agent when `to` is `*`. Returns `{ message, recipients }`.
-- `inbox(name)`: that name's `Inbox`.
-- `Inbox.put(message)`: queues a message in send order; a message taken and put back keeps its place.
-- `Inbox.take()`: removes and returns all queued messages, oldest first.
-- `Inbox.watch(onMail)`: calls `onMail` on file events and once a second. Returns `stop()`. Keeps no process alive.
+- `queue(name)`: that name's message `Queue`.
+- `Queue.put(message)`: queues a message in send order; a message taken and put back keeps its place.
+- `Queue.take()`: removes and returns all queued messages, oldest first.
+- `Queue.watch(onChange)`: calls `onChange` on file events and once a second. Returns `stop()`. Keeps no process alive.
 - `BEAT_MS` (5000): how often a holder should beat. A name with no beat for 3 x `BEAT_MS` is gone.
 - Message: `{ id, from, to, text, at }`, `at` is ISO 8601.
 
@@ -24,14 +24,14 @@ Version 0.2. A shared folder where agents find each other and leave messages. Pl
 
 ```
 <dir>/agents/<name>.json             { name, about, owner, since }, mtime is the last beat
-<dir>/inbox/<name>/<ms>-<id>.json    one message, written then renamed into place
+<dir>/messages/<name>/<ms>-<id>.json one message, written then renamed into place
 ```
 
 ## Errors and invariants
 
 - `claim` throws on an invalid name or a name another live owner holds. A record past its beat is removed on read.
 - `post` throws when `to` is not online, listing who is.
-- Only the owner takes from an inbox. Messages wait in an inbox until taken, across restarts.
+- Only the owner takes from a queue. Messages wait in their queue until taken, across restarts.
 
 ## Depends on
 

@@ -40,13 +40,13 @@ test('post queues in order, take empties, put restores a place', () => {
   bus.claim('beta', 'b');
   bus.post('alpha', 'beta', 'one');
   bus.post('alpha', 'beta', 'two');
-  const inbox = bus.inbox('beta');
-  const [one, two] = inbox.take();
+  const queue = bus.queue('beta');
+  const [one, two] = queue.take();
   assert.deepEqual([one.from, one.text, two.text], ['alpha', 'one', 'two']);
-  inbox.put(two);
-  inbox.put(one);
-  assert.deepEqual(inbox.take().map((m) => m.text), ['one', 'two']);
-  assert.deepEqual(inbox.take(), []);
+  queue.put(two);
+  queue.put(one);
+  assert.deepEqual(queue.take().map((m) => m.text), ['one', 'two']);
+  assert.deepEqual(queue.take(), []);
 });
 
 test('post to everyone skips the sender, post to nobody throws', () => {
@@ -54,22 +54,22 @@ test('post to everyone skips the sender, post to nobody throws', () => {
   bus.claim('alpha', 'a');
   bus.claim('beta', 'b');
   assert.deepEqual(bus.post('alpha', EVERYONE, 'hi').recipients, ['beta']);
-  assert.equal(bus.inbox('alpha').take().length, 0);
+  assert.equal(bus.queue('alpha').take().length, 0);
   assert.throws(() => bus.post('alpha', 'gamma', 'hi'), /no agent "gamma" online. online: beta/);
 });
 
-test('watch fires when mail arrives', async () => {
+test('watch fires when a message arrives', async () => {
   const bus = fresh();
   bus.claim('alpha', 'a');
   bus.claim('beta', 'b');
-  const inbox = bus.inbox('beta');
+  const queue = bus.queue('beta');
   const keepAlive = setTimeout(() => {}, 5000);
   const arrived = new Promise((resolve) => {
-    const stop = inbox.watch(() => {
-      const mail = inbox.take();
-      if (mail.length) {
+    const stop = queue.watch(() => {
+      const messages = queue.take();
+      if (messages.length) {
         stop();
-        resolve(mail[0].text);
+        resolve(messages[0].text);
       }
     });
   });

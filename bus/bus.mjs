@@ -1,20 +1,20 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Inbox } from './inbox.mjs';
+import { Queue } from './queue.mjs';
 
 const NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const EVERYONE = '*';
 export const BEAT_MS = 5000;
 const STALE_MS = 3 * BEAT_MS;
 
-/** A folder shared by every agent: who is online, and one inbox per name. Works across processes and containers. */
+/** A folder shared by every agent: who is online, and one message queue per name. Works across processes and containers. */
 export class Bus {
   constructor(dir) {
     this.agentsDir = join(dir, 'agents');
-    this.inboxDir = join(dir, 'inbox');
+    this.messagesDir = join(dir, 'messages');
     mkdirSync(this.agentsDir, { recursive: true });
-    mkdirSync(this.inboxDir, { recursive: true });
+    mkdirSync(this.messagesDir, { recursive: true });
   }
 
   /** Takes `name` for `owner` (any unique token) and says what it is good at. Throws when another live owner holds it. */
@@ -57,12 +57,12 @@ export class Bus {
     }
     const recipients = to === EVERYONE ? others : [to];
     const message = { id: `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`, from, to, text, at: new Date().toISOString() };
-    for (const name of recipients) this.inbox(name).put(message);
+    for (const name of recipients) this.queue(name).put(message);
     return { message, recipients };
   }
 
-  inbox(name) {
-    return new Inbox(join(this.inboxDir, name));
+  queue(name) {
+    return new Queue(join(this.messagesDir, name));
   }
 
   #presence(name) {

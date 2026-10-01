@@ -2,15 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { BEAT_MS } from '../bus/bus.mjs';
 
 /**
- * One agent on the bus: its name, its inbox, and how its mail reaches it.
- * Mail goes to a pending `inbox` wait first, else to the doorbell when one is set, else stays queued
+ * One agent on the bus: its name, its message queue, and how its messages reach it.
+ * A message goes to a pending `messages` wait first, else to the doorbell when one is set, else stays queued
  * until the agent's next tool call. A doorbell that fails puts the message back and is dropped.
  */
 export class Session {
   #owner = randomUUID();
   #name = null;
   #about = '';
-  #inbox = null;
+  #queue = null;
   #stop = null;
   #waiter = null;
   #doorbell = null;
@@ -36,8 +36,8 @@ export class Session {
     if (name !== this.#name) {
       this.leave();
       this.#name = name;
-      this.#inbox = this.bus.inbox(name);
-      const stopWatch = this.#inbox.watch(() => this.#deliver());
+      this.#queue = this.bus.queue(name);
+      const stopWatch = this.#queue.watch(() => this.#deliver());
       const beat = setInterval(() => this.#keepAlive(), BEAT_MS);
       beat.unref();
       this.#stop = () => {
@@ -52,7 +52,7 @@ export class Session {
     if (!this.#name) return;
     this.#stop();
     this.bus.release(this.#name, this.#owner);
-    this.#name = this.#inbox = null;
+    this.#name = this.#queue = null;
   }
 
   send(to, text) {
@@ -64,23 +64,23 @@ export class Session {
     return { you: this.#name, online: this.bus.online().filter((a) => a.name !== this.#name) };
   }
 
-  /** Queued mail, taken now. Empty before `join`, and while an `inbox` wait is pending (it gets the mail). */
+  /** Queued messages, taken now. Empty before `join`, and while a `messages` wait is pending (it gets them). */
   take() {
-    return this.#inbox && !this.#waiter ? this.#inbox.take() : [];
+    return this.#queue && !this.#waiter ? this.#queue.take() : [];
   }
 
-  /** Queued mail now, or the next mail within `seconds`, or `[]`. Ends early on abort. */
-  inbox(seconds, signal) {
+  /** Queued messages now, or the next ones within `seconds`, or `[]`. Ends early on abort. */
+  messages(seconds, signal) {
     this.#joined();
     const queued = this.take();
     if (queued.length || !seconds) return Promise.resolve(queued);
     this.#waiter?.([]);
     return new Promise((resolve) => {
-      const done = (mail) => {
+      const done = (messages) => {
         clearTimeout(timer);
         signal?.removeEventListener('abort', cancel);
         if (this.#waiter === done) this.#waiter = null;
-        resolve(mail);
+        resolve(messages);
       };
       const cancel = () => done([]);
       const timer = setTimeout(cancel, seconds * 1000);
@@ -91,18 +91,18 @@ export class Session {
   }
 
   #deliver() {
-    if (!this.#inbox || (!this.#waiter && !this.#doorbell)) return;
-    const mail = this.#inbox.take();
-    if (!mail.length) return;
-    if (this.#waiter) return this.#waiter(mail);
-    for (const message of mail) this.#ringing = this.#ringing.then(() => this.#ring(message));
+    if (!this.#queue || (!this.#waiter && !this.#doorbell)) return;
+    const messages = this.#queue.take();
+    if (!messages.length) return;
+    if (this.#waiter) return this.#waiter(messages);
+    for (const message of messages) this.#ringing = this.#ringing.then(() => this.#ring(message));
   }
 
   async #ring(message) {
     const ring = this.#doorbell;
     if (ring && (await ring(message).catch(() => false))) return;
     if (this.#doorbell === ring) this.#doorbell = null;
-    this.#inbox?.put(message);
+    this.#queue?.put(message);
   }
 
   /** Refreshes presence, and claims the name again after a pause long enough to look gone (a laptop sleep). */

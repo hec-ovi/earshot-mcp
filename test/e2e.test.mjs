@@ -96,32 +96,32 @@ test('two agents listen and send at the same time', async () => {
   await alpha.call('join', { name: 'alpha', about: 'web search' });
   assert.deepEqual((await beta.call('join', { name: 'beta' })).online, [{ name: 'alpha', about: 'web search' }]);
 
-  const alphaHears = alpha.call('inbox', { wait: 10 });
-  const betaHears = beta.call('inbox', { wait: 10 });
+  const alphaHears = alpha.call('messages', { wait: 10 });
+  const betaHears = beta.call('messages', { wait: 10 });
   await Promise.all([alpha.call('send', { to: 'beta', text: 'ping' }), beta.call('send', { to: 'alpha', text: 'pong' })]);
   const [toAlpha, toBeta] = await Promise.all([alphaHears, betaHears]);
-  assert.deepEqual(toAlpha.mail.map((m) => [m.from, m.text]), [['beta', 'pong']]);
-  assert.deepEqual(toBeta.mail.map((m) => [m.from, m.text]), [['alpha', 'ping']]);
+  assert.deepEqual(toAlpha.messages.map((m) => [m.from, m.text]), [['beta', 'pong']]);
+  assert.deepEqual(toBeta.messages.map((m) => [m.from, m.text]), [['alpha', 'ping']]);
 
   await alpha.close();
   assert.deepEqual(await beta.call('agents'), { you: 'beta', online: [] });
   await beta.close();
 });
 
-test('mail queues and rides along on the next tool result', async () => {
+test('messages queue and ride along on the next tool result', async () => {
   const dir = bus();
   const [alpha, beta] = await Promise.all([Peer.start(dir), Peer.start(dir)]);
   await alpha.call('join', { name: 'alpha' });
   await beta.call('join', { name: 'beta' });
   await alpha.call('send', { to: 'beta', text: 'one' });
   await alpha.call('send', { to: '*', text: 'two' });
-  assert.deepEqual((await beta.call('agents')).mail.map((m) => m.text), ['one', 'two']);
-  assert.deepEqual(await beta.call('inbox'), { mail: [] });
-  assert.deepEqual(await beta.call('inbox', { wait: 0.2 }), { mail: [] });
+  assert.deepEqual((await beta.call('agents')).messages.map((m) => m.text), ['one', 'two']);
+  assert.deepEqual(await beta.call('messages'), { messages: [] });
+  assert.deepEqual(await beta.call('messages', { wait: 0.2 }), { messages: [] });
   await Promise.all([alpha.close(), beta.close()]);
 });
 
-test('a channel agent gets mail pushed', async () => {
+test('messages are pushed to a channel agent', async () => {
   const dir = bus();
   const [claude, codex] = await Promise.all([Peer.start(dir, ['--channel']), Peer.start(dir)]);
   await claude.call('join', { name: 'claude' });
@@ -132,7 +132,7 @@ test('a channel agent gets mail pushed', async () => {
   await Promise.all([claude.close(), codex.close()]);
 });
 
-test('an interactive codex session gets mail through codex queue', async () => {
+test('an interactive codex session gets messages through codex queue', async () => {
   const dir = bus();
   const fake = fakeCodex();
   const [claude, codex] = await Promise.all([Peer.start(dir), Peer.start(dir, [], fake.env)]);
@@ -146,7 +146,7 @@ test('an interactive codex session gets mail through codex queue', async () => {
   await Promise.all([claude.close(), codex.close()]);
 });
 
-test('codex exec runs and failed rings keep mail queued', async () => {
+test('codex exec runs and failed rings keep messages queued', async () => {
   const dir = bus();
   const fake = fakeCodex();
   const [claude, codex] = await Promise.all([Peer.start(dir), Peer.start(dir, [], { ...fake.env, FAKE_CODEX_EXIT: '1' })]);
@@ -156,8 +156,8 @@ test('codex exec runs and failed rings keep mail queued', async () => {
   await codex.call('agents', {}, codexTurn('user'));
   await claude.call('send', { to: 'codex', text: 'second' });
   await until(() => fake.calls().length === 1);
-  const { mail } = await codex.call('inbox', { wait: 2 });
-  assert.deepEqual(mail.map((m) => m.text), ['second']);
+  const { messages } = await codex.call('messages', { wait: 2 });
+  assert.deepEqual(messages.map((m) => m.text), ['second']);
   await Promise.all([claude.close(), codex.close()]);
 });
 
