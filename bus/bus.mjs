@@ -1,12 +1,14 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Inbox } from './inbox.mjs';
 
 const NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const EVERYONE = '*';
+export const BEAT_MS = 5000;
+const STALE_MS = 3 * BEAT_MS;
 
-/** A folder shared by every agent on the machine: who is online, and one inbox per name. */
+/** A folder shared by every agent: who is online, and one inbox per name. Works across processes and containers. */
 export class Bus {
   constructor(dir) {
     this.agentsDir = join(dir, 'agents');
@@ -15,51 +17,47 @@ export class Bus {
     mkdirSync(this.inboxDir, { recursive: true });
   }
 
-  /** Takes `name` for process `pid`. Throws when a live process already holds it. */
-  claim(name, pid = process.pid) {
+  /** Takes `name` for `owner` (any unique token) and says what it is good at. Throws when another live owner holds it. */
+  claim(name, owner, about = '') {
     if (!NAME.test(name)) throw new Error(`invalid name "${name}": use 1-32 of a-z, 0-9, "-", "_"`);
+    const holder = this.#record(name);
+    if (holder && holder.owner !== owner) throw new Error(`name "${name}" is taken by a live agent`);
     const file = this.#presence(name);
-    const record = JSON.stringify({ name, pid, since: new Date().toISOString() });
-    try {
-      writeFileSync(file, record, { flag: 'wx' });
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
-      const holder = this.#holder(name);
-      if (holder === pid) return;
-      if (holder !== null) throw new Error(`name "${name}" is taken by a live agent`);
-      writeFileSync(file, record);
-    }
+    writeFileSync(`${file}.${owner}`, JSON.stringify({ name, about, owner, since: holder?.since ?? new Date().toISOString() }));
+    renameSync(`${file}.${owner}`, file);
   }
 
-  /** Frees `name` if `pid` holds it. */
-  release(name, pid = process.pid) {
-    if (this.#holder(name) === pid) rmSync(this.#presence(name), { force: true });
+  /** Keeps `name` alive. Returns false when `owner` no longer holds it. */
+  beat(name, owner) {
+    if (this.#record(name)?.owner !== owner) return false;
+    const now = new Date();
+    utimesSync(this.#presence(name), now, now);
+    return true;
   }
 
-  /** Names held by live processes, sorted. Stale records are removed. */
+  release(name, owner) {
+    if (this.#record(name)?.owner === owner) rmSync(this.#presence(name), { force: true });
+  }
+
+  /** Live agents as `{ name, about }`, sorted by name. Records without a recent beat are removed. */
   online() {
     return readdirSync(this.agentsDir)
       .filter((f) => f.endsWith('.json'))
-      .map((f) => f.slice(0, -5))
-      .filter((name) => this.#holder(name) !== null)
-      .sort();
+      .map((f) => this.#record(f.slice(0, -5)))
+      .filter(Boolean)
+      .map(({ name, about }) => ({ name, about }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  /** Drops `text` into the inbox of `to` (a name, or `*` for everyone else). Returns the message and its recipients. */
+  /** Queues `text` for `to` (a name, or `*` for every other agent). Returns the message and its recipients. */
   post(from, to, text) {
-    const others = this.online().filter((name) => name !== from);
-    const recipients = to === EVERYONE ? others : [to];
+    const others = this.online().map((a) => a.name).filter((name) => name !== from);
     if (to !== EVERYONE && !others.includes(to)) {
       throw new Error(`no agent "${to}" online. online: ${others.join(', ') || 'nobody'}`);
     }
+    const recipients = to === EVERYONE ? others : [to];
     const message = { id: `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`, from, to, text, at: new Date().toISOString() };
-    for (const name of recipients) {
-      const dir = join(this.inboxDir, name);
-      mkdirSync(dir, { recursive: true });
-      const file = `${String(Date.now()).padStart(15, '0')}-${message.id}.json`;
-      writeFileSync(join(dir, `.${file}`), JSON.stringify(message));
-      renameSync(join(dir, `.${file}`), join(dir, file));
-    }
+    for (const name of recipients) this.inbox(name).put(message);
     return { message, recipients };
   }
 
@@ -71,25 +69,17 @@ export class Bus {
     return join(this.agentsDir, `${name}.json`);
   }
 
-  /** The live pid holding `name`, or null. A record whose process is gone is deleted. */
-  #holder(name) {
-    let pid;
+  /** The live record for `name`, or null. A record with no recent beat is deleted. */
+  #record(name) {
+    const file = this.#presence(name);
     try {
-      pid = JSON.parse(readFileSync(this.#presence(name), 'utf8')).pid;
+      if (Date.now() - statSync(file).mtimeMs > STALE_MS) {
+        rmSync(file, { force: true });
+        return null;
+      }
+      return JSON.parse(readFileSync(file, 'utf8'));
     } catch {
       return null;
     }
-    if (alive(pid)) return pid;
-    rmSync(this.#presence(name), { force: true });
-    return null;
-  }
-}
-
-function alive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return err.code === 'EPERM';
   }
 }

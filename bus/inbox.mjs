@@ -1,13 +1,20 @@
-import { mkdirSync, readdirSync, readFileSync, rmSync, watch } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const POLL_MS = 1000;
 
-/** One agent's queue of message files, oldest first. Only its owner reads it. */
+/** One agent's queue of message files, oldest first. Only its owner takes from it. */
 export class Inbox {
   constructor(dir) {
     this.dir = dir;
     mkdirSync(dir, { recursive: true });
+  }
+
+  /** Queues a message in send order. Putting back a taken message restores its place. */
+  put(message) {
+    const file = `${String(Date.parse(message.at)).padStart(15, '0')}-${message.id}.json`;
+    writeFileSync(join(this.dir, `.${file}`), JSON.stringify(message));
+    renameSync(join(this.dir, `.${file}`), join(this.dir, file));
   }
 
   /** Removes and returns every queued message, oldest first. */
@@ -23,7 +30,7 @@ export class Inbox {
       });
   }
 
-  /** Calls `onMail` when the inbox may have changed. A slow poll backs up file events. Returns a stop function. */
+  /** Calls `onMail` when the inbox may have changed. A slow poll backs up file events (bind mounts can miss them). Returns a stop function. */
   watch(onMail) {
     const watcher = watch(this.dir, onMail);
     const timer = setInterval(onMail, POLL_MS);
