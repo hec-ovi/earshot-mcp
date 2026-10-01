@@ -77,3 +77,18 @@ test('watch fires when a message arrives', async () => {
   assert.equal(await arrived, 'ping');
   clearTimeout(keepAlive);
 });
+
+test('status says the folder is writable, who is online with their last beat, and what waits where', () => {
+  const bus = fresh();
+  bus.claim('alpha', 'a', 'web search');
+  bus.claim('beta', 'b');
+  bus.post('alpha', 'beta', 'one');
+  bus.post('alpha', 'beta', 'two');
+  bus.release('beta', 'b');
+  const status = bus.status();
+  assert.equal(status.writable, true);
+  assert.deepEqual(status.agents.map(({ name, about }) => ({ name, about })), [{ name: 'alpha', about: 'web search' }]);
+  assert.ok(status.agents[0].lastBeatMs >= 0 && status.agents[0].lastBeatMs < 5000);
+  assert.deepEqual(status.queued, { beta: 2 });
+  assert.equal(bus.queue('beta').size(), 2);
+});

@@ -5,20 +5,28 @@ const QUEUED = readFileSync(new URL('./prompts/queued.md', import.meta.url), 'ut
 const INTERACTIVE = ['user', 'queue'];
 
 /** Claude Code channel: the message enters the session as a <channel> tag, between tool calls or as a new turn. */
-export const claudeChannel = (mcp) => async (message) => {
-  await mcp.server.notification({
-    method: 'notifications/claude/channel',
-    params: { content: message.text, meta: { from: message.from, id: message.id } },
-  });
-  return true;
-};
+export const claudeChannel = (mcp) =>
+  Object.assign(
+    async (message) => {
+      await mcp.server.notification({
+        method: 'notifications/claude/channel',
+        params: { content: message.text, meta: { from: message.from, id: message.id } },
+      });
+      return true;
+    },
+    { kind: 'claude channel' },
+  );
 
 /** Codex: `codex queue` adds the message to the session's own queue. An idle session starts a turn with it. */
-export const codexQueue = (thread) => (message) =>
-  new Promise((resolve) => {
-    const text = QUEUED.replaceAll('{from}', message.from).replace('{text}', message.text);
-    execFile('codex', ['queue', '--thread', thread, '--message', text], { timeout: 30_000 }, (err) => resolve(!err));
-  });
+export const codexQueue = (thread) =>
+  Object.assign(
+    (message) =>
+      new Promise((resolve) => {
+        const text = QUEUED.replaceAll('{from}', message.from).replace('{text}', message.text);
+        execFile('codex', ['queue', '--thread', thread, '--message', text], { timeout: 30_000 }, (err) => resolve(!err));
+      }),
+    { kind: 'codex queue' },
+  );
 
 /** The doorbell a tool call's metadata offers, or null. Interactive Codex sessions send their thread id with every call. */
 export function doorbellFor(meta) {

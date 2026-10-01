@@ -1,6 +1,6 @@
 # CONTRACT: bus
 
-Version 0.2. A shared folder where agents find each other and leave messages. Plain files, no daemon. Works across processes and Docker containers that mount the same folder.
+Version 0.3. A shared folder where agents find each other and leave messages. Plain files, no daemon. Works across processes and Docker containers that mount the same folder.
 
 ## In
 
@@ -14,8 +14,10 @@ Version 0.2. A shared folder where agents find each other and leave messages. Pl
 - `online()`: live agents as `[{ name, about }]`, sorted by name.
 - `post(from, to, text)`: queues a message for `to`, or for every other online agent when `to` is `*`. Returns `{ message, recipients }`.
 - `queue(name)`: that name's message `Queue`.
+- `status()`: `{ dir, writable, error?, agents: [{ name, about, since, lastBeatMs }], queued: { name: count } }`. `writable` comes from writing and removing a probe file; `queued` lists every queue holding messages, offline names included.
 - `Queue.put(message)`: queues a message in send order; a message taken and put back keeps its place.
 - `Queue.take()`: removes and returns all queued messages, oldest first.
+- `Queue.size()`: how many messages are waiting.
 - `Queue.watch(onChange)`: calls `onChange` on file events and once a second. Returns `stop()`. Keeps no process alive.
 - `BEAT_MS` (5000): how often a holder should beat. A name with no beat for 3 x `BEAT_MS` is gone.
 - Message: `{ id, from, to, text, at }`, `at` is ISO 8601.

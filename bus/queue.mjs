@@ -17,6 +17,11 @@ export class Queue {
     renameSync(join(this.dir, `.${file}`), join(this.dir, file));
   }
 
+  /** How many messages are waiting. */
+  size() {
+    return readdirSync(this.dir).filter((f) => f.endsWith('.json') && !f.startsWith('.')).length;
+  }
+
   /** Removes and returns every queued message, oldest first. */
   take() {
     return readdirSync(this.dir)

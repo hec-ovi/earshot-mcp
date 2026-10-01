@@ -64,6 +64,12 @@ export class Session {
     return { you: this.#name, online: this.bus.online().filter((a) => a.name !== this.#name) };
   }
 
+  /** This agent and the bus: its name, how its messages reach it now, and the bus status. Works before `join`. */
+  health() {
+    const delivery = !this.#name ? 'not joined' : this.#waiter ? 'messages wait' : (this.#doorbell?.kind ?? 'with tool results');
+    return { you: this.#name, delivery, ...this.bus.status() };
+  }
+
   /** Queued messages, taken now. Empty before `join`, and while a `messages` wait is pending (it gets them). */
   take() {
     return this.#queue && !this.#waiter ? this.#queue.take() : [];

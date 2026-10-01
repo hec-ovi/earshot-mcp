@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -169,4 +169,36 @@ test('errors come back as tool errors', async () => {
   await assert.rejects(beta.call('join', { name: 'alpha' }), /taken/);
   await assert.rejects(alpha.call('send', { to: 'nobody', text: 'hi' }), /no agent "nobody" online/);
   await Promise.all([alpha.close(), beta.close()]);
+});
+
+test('health works before and after join and says how messages arrive', async () => {
+  const dir = bus();
+  const peer = await Peer.start(dir);
+  const before = await peer.call('health');
+  assert.equal(before.you, null);
+  assert.equal(before.delivery, 'not joined');
+  assert.equal(before.writable, true);
+  assert.match(before.version, /^\d+\.\d+\.\d+$/);
+  await peer.call('join', { name: 'alpha', about: 'tests' });
+  const after = await peer.call('health');
+  assert.equal(after.you, 'alpha');
+  assert.equal(after.delivery, 'with tool results');
+  assert.deepEqual(after.agents.map((a) => a.name), ['alpha']);
+  await peer.close();
+});
+
+test('--check reports the bus for a person and fails on a folder it cannot use', async () => {
+  const dir = bus();
+  const peer = await Peer.start(dir);
+  await peer.call('join', { name: 'alpha', about: 'tests' });
+  const ok = spawnSync(process.execPath, [BIN, '--check'], { env: { ...process.env, EARSHOT_DIR: dir }, encoding: 'utf8' });
+  assert.equal(ok.status, 0);
+  assert.match(ok.stdout, /writable/);
+  assert.match(ok.stdout, /alpha +last beat/);
+  await peer.close();
+  const file = join(dir, 'not-a-folder');
+  writeFileSync(file, '');
+  const bad = spawnSync(process.execPath, [BIN, '--check'], { env: { ...process.env, EARSHOT_DIR: file }, encoding: 'utf8' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stdout, /unusable/);
 });

@@ -11,6 +11,7 @@ const STALE_MS = 3 * BEAT_MS;
 /** A folder shared by every agent: who is online, and one message queue per name. Works across processes and containers. */
 export class Bus {
   constructor(dir) {
+    this.dir = dir;
     this.agentsDir = join(dir, 'agents');
     this.messagesDir = join(dir, 'messages');
     mkdirSync(this.agentsDir, { recursive: true });
@@ -63,6 +64,39 @@ export class Bus {
 
   queue(name) {
     return new Queue(join(this.messagesDir, name));
+  }
+
+  /**
+   * The bus at a glance: whether the folder can be written, who is online with their last beat,
+   * and every queue holding messages, including those of agents that are offline.
+   */
+  status() {
+    let writable = true;
+    let error;
+    try {
+      const probe = join(this.dir, `.health-${randomUUID()}`);
+      writeFileSync(probe, '');
+      rmSync(probe);
+    } catch (err) {
+      writable = false;
+      error = err.message;
+    }
+    const now = Date.now();
+    const agents = [];
+    for (const { name } of this.online()) {
+      try {
+        const { about, since } = JSON.parse(readFileSync(this.#presence(name), 'utf8'));
+        agents.push({ name, about, since, lastBeatMs: Math.round(now - statSync(this.#presence(name)).mtimeMs) });
+      } catch {
+        // Gone between listing and reading.
+      }
+    }
+    const queued = {};
+    for (const name of readdirSync(this.messagesDir)) {
+      const waiting = this.queue(name).size();
+      if (waiting) queued[name] = waiting;
+    }
+    return { dir: this.dir, writable, ...(error ? { error } : {}), agents, queued };
   }
 
   #presence(name) {

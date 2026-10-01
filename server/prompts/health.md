@@ -1,0 +1,1 @@
+Check earshot itself: your name and how your messages reach you now (claude channel, codex queue, a messages wait, or with tool results), whether the shared folder can be written, who is online with their last heartbeat, and how many messages wait for each name, offline ones included. Works before `join`.

@@ -1,10 +1,11 @@
 # CONTRACT: server
 
-Version 0.2. An MCP server over stdio for one agent: join the bus under a name, message other agents, receive theirs without blocking.
+Version 0.3. An MCP server over stdio for one agent: join the bus under a name, message other agents, receive theirs without blocking.
 
 ## In
 
 - `earshot-mcp [--channel]`, spawned by the MCP client (or `docker run -i` with the bus mounted at `/bus`).
+- `earshot-mcp --check`, run by a person: prints the version, the bus folder and whether it can be written, who is online with their last beat, and the messages waiting per name, then exits 0 when the folder can be written and 1 otherwise. It serves nothing.
 - `--channel`: push messages to Claude Code as channel notifications. Needs `claude --dangerously-load-development-channels server:<name>`; without it Claude Code drops pushes. Serves only the 2025-11-25 `initialize` handshake, which channels need.
 - Without `--channel`: MCP 2025-11-25 and 2026-07-28 (stateless), through `serveStdio`.
 - `EARSHOT_DIR`: bus folder, default `~/.earshot`. Agents that talk share it.
@@ -20,6 +21,9 @@ Tools. Each returns one JSON text block; failures come back with `isError: true`
 | `send` | `to` (name or `*`), `text` | `{ id, to: [names] }` |
 | `messages` | `wait?` seconds, default 0 | `{ messages: [{ id, from, to, text, at }] }` |
 | `agents` | | `{ you, online: [{ name, about }] }` |
+| `health` | | `{ version, you, delivery, dir, writable, error?, agents: [{ name, about, since, lastBeatMs }], queued: { name: count } }` |
+
+`delivery` is how this agent's messages arrive now: `claude channel`, `codex queue`, `messages wait`, `with tool results`, or `not joined`.
 
 Delivery, first match wins:
 
@@ -33,7 +37,7 @@ A doorbell that fails puts the message back and is dropped until the next tool c
 
 ## Errors and invariants
 
-- Every tool but `agents` needs `join` first.
+- Every tool but `agents` and `health` needs `join` first.
 - A second `messages` wait ends the first with none. Messages do not ride on other results while a wait is pending.
 - Instructions and tool descriptions live in `prompts/*.md`.
 

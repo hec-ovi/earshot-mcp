@@ -49,6 +49,7 @@ export function createServer(session, { channel = false } = {}) {
     messages: await session.messages(wait ?? 0, ctx.mcpReq.signal),
   }));
   tool('agents', { readOnlyHint: true }, {}, () => session.agents());
+  tool('health', { readOnlyHint: true }, {}, () => ({ version, ...session.health() }));
   return mcp;
 }
 
@@ -58,6 +59,26 @@ const text = (value) => ({ content: [{ type: 'text', text: typeof value === 'str
  * Serves one agent over stdio on the bus in `dir`.
  * With `channel`, messages are pushed to Claude Code; channels need the 2025 `initialize` handshake, so only that era is served.
  */
+/** `earshot-mcp --check`: the bus status for a person on `out`. Returns the exit code, 0 when the bus folder can be written. */
+export function check(dir, out = process.stdout) {
+  let status;
+  try {
+    status = new Bus(dir).status();
+  } catch (err) {
+    out.write(`earshot ${version}\nbus      ${dir}  unusable: ${err.message}\n`);
+    return 1;
+  }
+  const lines = [`earshot ${version}`, `bus      ${status.dir}  ${status.writable ? 'writable' : `not writable: ${status.error}`}`];
+  lines.push(`online   ${status.agents.length}`);
+  for (const { name, about, lastBeatMs } of status.agents) {
+    lines.push(`  ${name.padEnd(16)} last beat ${(lastBeatMs / 1000).toFixed(1)} s ago${about ? `  ${about}` : ''}`);
+  }
+  const queued = Object.entries(status.queued);
+  lines.push(`queued   ${queued.length ? queued.map(([name, n]) => `${name} ${n}`).join(', ') : 'none'}`);
+  out.write(lines.join('\n') + '\n');
+  return status.writable ? 0 : 1;
+}
+
 export function serve({ dir, channel = false }) {
   const session = new Session(new Bus(dir));
   if (channel) {
