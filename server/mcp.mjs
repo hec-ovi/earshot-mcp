@@ -1,17 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/server';
-import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { serveStdio, StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import * as z from 'zod/v4';
 import { Bus } from '../bus/bus.mjs';
 import { Session } from './session.mjs';
+import { claudeChannel, doorbellFor } from './doorbells.mjs';
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const WAIT_SECONDS = 45;
-const LOCAL = { openWorldHint: false };
+const LOCAL = { openWorldHint: false, destructiveHint: false };
 
 const prompt = (name) => readFileSync(new URL(`./prompts/${name}.md`, import.meta.url), 'utf8').trim();
 
-/** The MCP server for one session: tools join, send, wait, agents. `channel` declares Claude Code push. */
+/**
+ * The MCP server for one session: tools join, send, inbox, agents.
+ * Every result carries queued mail under `mail`. Tool calls from an interactive Codex session arm its doorbell.
+ * `channel` declares Claude Code push and leaves the doorbell to it.
+ */
 export function createServer(session, { channel = false } = {}) {
   const mcp = new McpServer(
     { name: 'earshot', version },
@@ -23,41 +27,46 @@ export function createServer(session, { channel = false } = {}) {
   const tool = (name, annotations, shape, run) =>
     mcp.registerTool(name, { description: prompt(name), inputSchema: z.object(shape), annotations: { ...LOCAL, ...annotations } }, async (args, ctx) => {
       try {
-        return { content: [{ type: 'text', text: JSON.stringify(await run(args, ctx)) }] };
+        const result = await run(args, ctx);
+        const mail = session.take();
+        if (!channel) session.doorbell = doorbellFor(ctx.mcpReq._meta) ?? null;
+        return text(mail.length ? { ...result, mail: [...(result.mail ?? []), ...mail] } : result);
       } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
+        return { ...text(err.message), isError: true };
       }
     });
 
-  tool('join', { destructiveHint: false, idempotentHint: true }, { name: z.string().describe('your name on the bus') }, ({ name }) =>
-    session.join(name),
-  );
   tool(
-    'send',
-    { destructiveHint: false },
-    { to: z.string().describe('agent name, or "*" for everyone'), text: z.string().describe('the message') },
-    ({ to, text }) => session.send(to, text),
+    'join',
+    { idempotentHint: true },
+    { name: z.string().describe('your name'), about: z.string().optional().describe('what you are good at') },
+    ({ name, about }) => session.join(name, about),
   );
-  tool(
-    'wait',
-    { destructiveHint: false },
-    { seconds: z.number().positive().optional().describe(`how long to wait, default ${WAIT_SECONDS}`) },
-    async ({ seconds }, ctx) => ({ messages: await session.wait(seconds ?? WAIT_SECONDS, ctx.mcpReq.signal) }),
+  tool('send', {}, { to: z.string().describe('agent name, or "*" for everyone'), text: z.string().describe('the message') }, ({ to, text }) =>
+    session.send(to, text),
   );
+  tool('inbox', {}, { wait: z.number().nonnegative().optional().describe('seconds to wait for mail, default 0') }, async ({ wait }, ctx) => ({
+    mail: await session.inbox(wait ?? 0, ctx.mcpReq.signal),
+  }));
   tool('agents', { readOnlyHint: true }, {}, () => session.agents());
   return mcp;
 }
 
-/** Serves one agent over stdio on the bus in `dir`. With `channel`, mail is pushed as `notifications/claude/channel`. */
+const text = (value) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] });
+
+/**
+ * Serves one agent over stdio on the bus in `dir`.
+ * With `channel`, mail is pushed to Claude Code; channels need the 2025 `initialize` handshake, so only that era is served.
+ */
 export function serve({ dir, channel = false }) {
-  let mcp = null;
-  const push = (message) =>
-    mcp.server.notification({
-      method: 'notifications/claude/channel',
-      params: { content: message.text, meta: { from: message.from, id: message.id } },
-    });
-  const session = new Session(new Bus(dir), channel ? push : null);
-  serveStdio(() => (mcp = createServer(session, { channel })));
+  const session = new Session(new Bus(dir));
+  if (channel) {
+    const mcp = createServer(session, { channel });
+    session.doorbell = claudeChannel(mcp);
+    mcp.connect(new StdioServerTransport());
+  } else {
+    serveStdio(() => createServer(session));
+  }
   process.on('exit', () => session.leave());
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => process.exit(0));
 }
