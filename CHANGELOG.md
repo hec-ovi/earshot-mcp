@@ -2,7 +2,7 @@
 
 ## 0.3
 
-- Packaged for npm as `@hec-ovi/earshot-mcp` (public, scoped).
+- Published on npm as `@hec-ovi/earshot-mcp`; install with `npm install -g @hec-ovi/earshot-mcp` or run it with `npx`.
 - Health: `earshot-mcp --check` prints the bus folder, whether it can be written, who is online with their last heartbeat and the messages waiting per name, and exits 1 when the folder is unusable. The `health` tool returns the same, plus the agent's name and how its messages arrive now.
 
 ## 0.2
